@@ -7,6 +7,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { NextResponse } from "next/server";
 import { getWalletBalance, GetBalanceInput, GET_BALANCE_PROMPT } from "@/lib/actions/getWalletBalance";
 import { getTokenInfo, GetTokenInfoInput, GET_TOKEN_INFO_PROMPT } from "@/lib/actions/getTokenInfo";
+import { executeUniswapV3Swap, UniswapV3SwapInput, UNISWAP_V3_SWAP_PROMPT } from "@/lib/actions/uniswapV3swap";
 import { supabase } from '@/lib/supabase';
 
 const modifier = `
@@ -38,7 +39,7 @@ async function initialize(walletData: string) {
   validateEnvironment();
 
   const llm = new ChatOpenAI({
-    model: "gpt-4",
+    model: "gpt-4o",
   });
 
   const agentConfig = {
@@ -48,6 +49,16 @@ async function initialize(walletData: string) {
 
   const agentkit = await CdpAgentkit.configureWithWallet(agentConfig);
   const cdpToolkit = new CdpToolkit(agentkit);
+
+  const uniswapV3SwapTool = new CdpTool(
+    {
+      name: "uniswap_v3_swap",
+      description: UNISWAP_V3_SWAP_PROMPT,
+      argsSchema: UniswapV3SwapInput,
+      func: executeUniswapV3Swap,
+    },
+    agentkit,
+  );
 
   const getWalletBalanceTool = new CdpTool(
     {
@@ -72,6 +83,7 @@ async function initialize(walletData: string) {
   const tools = cdpToolkit.getTools();
   tools.push(getWalletBalanceTool);
   tools.push(getTokenInfoTool);
+  tools.push(uniswapV3SwapTool);
   const memory = new MemorySaver();
 
   config = { configurable: { thread_id: "CDP AgentKit Chatbot Example!" } };
@@ -124,17 +136,25 @@ export async function POST(req: Request) {
     );
 
     let response = '';
+    let logs: any[] = [];
+
     for await (const chunk of stream) {
       if ("agent" in chunk) {
         response = chunk.agent.messages[0].content;
+        if (chunk.agent.log) {
+          logs.push(chunk.agent.log);
+        }
       }
     }
 
-    return NextResponse.json({ response });
+    return NextResponse.json({ 
+      response,
+      logs,
+    });
   } catch (error) {
     console.error('Chat error:', error);
     return NextResponse.json(
-      { error: 'Failed to process chat message' },
+      { error: 'Failed to process chat message', details: error },
       { status: 500 }
     );
   }

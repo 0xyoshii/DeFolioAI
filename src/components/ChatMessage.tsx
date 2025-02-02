@@ -1,10 +1,20 @@
 import { Message } from '@/types/chat';
 import { Card } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
+import { cn, formatMessageWithTxLinks } from '@/lib/utils';
 import { AVATAR_IMAGES } from '@/lib/constants';
+import ReactMarkdown from 'react-markdown';
+import React from 'react';
 
-export default function ChatMessage({ message }: { message: Message }) {
+export default function ChatMessage({ message, logs }: { message: Message; logs?: any[] }) {
+  const formattedContent = formatMessageWithTxLinks(message.content);
+
+  React.useEffect(() => {
+    if (logs?.length) {
+      console.log('Swap execution logs:', logs);
+    }
+  }, [logs]);
+
   return (
     <div className={cn(
       "flex items-start gap-2",
@@ -28,7 +38,21 @@ export default function ChatMessage({ message }: { message: Message }) {
           ? "bg-primary text-primary-foreground"
           : "bg-muted"
       )}>
-        <p className="leading-relaxed break-words">{message.content}</p>
+        <ReactMarkdown
+          className="leading-relaxed break-words"
+          components={{
+            a: ({ node, ...props }) => (
+              <a 
+                {...props} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              />
+            ),
+          }}
+        >
+          {formattedContent}
+        </ReactMarkdown>
       </Card>
     </div>
   );
